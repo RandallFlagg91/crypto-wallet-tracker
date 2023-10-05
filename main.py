@@ -12,7 +12,7 @@ TELEGRAM_BOT_TOKEN = '6126426826:AAF961nrKvqgzswwOSSKduFfd0HREdY2tWc'
 TELEGRAM_CHAT_ID = '-1001532173979'
 
 # Define some helper functions
-def get_wallet_transactions(wallet_address, blockchain):
+def get_wallet_transactions(wallet_address, blockchain, mote):
     if blockchain == 'eth':
         url = f'https://api.etherscan.io/api?module=account&action=txlist&address={wallet_address}&sort=desc&apikey={ETHERSCAN_API_KEY}'
     elif blockchain == 'bnb':
@@ -77,8 +77,8 @@ def monitor_wallets():
                 watched_wallets = set(f.read().splitlines())
 
             for wallet in watched_wallets:
-                blockchain, wallet_address = wallet.split(':')
-                transactions = get_wallet_transactions(wallet_address, blockchain)
+                blockchain, wallet_address, mote = wallet.split(':')
+                transactions = get_wallet_transactions(wallet_address, blockchain, mote)
                 for tx in transactions:
                     tx_hash = tx['hash']
                     tx_time = int(tx['timeStamp'])
@@ -87,13 +87,13 @@ def monitor_wallets():
                         if tx['to'].lower() == wallet_address.lower():
                             value = float(tx['value']) / 10**18 # Convert from wei to ETH or BNB
                             usd_value = value * (eth_usd_price if blockchain == 'eth' else bnb_usd_price) # Calculate value in USD
-                            message = f'🚨 Incoming transaction detected on {wallet_address}'
+                            message = f'🚨 Se ha detectado una transacción entrante en {mote}'
                             send_telegram_notification(message, value, usd_value, tx['hash'], blockchain)
                             #print(f'\n{message}, Value: {value} {blockchain.upper()}, ${usd_value:.2f}\n')
                         elif tx['from'].lower() == wallet_address.lower():
                             value = float(tx['value']) / 10**18 # Convert from wei to ETH or BNB
                             usd_value = value * (eth_usd_price if blockchain == 'eth' else bnb_usd_price) # Calculate value in USD
-                            message = f'🚨 Outgoing transaction detected on {wallet_address}'
+                            message = f'🚨 Se ha detectado una transacción saliente de {mote}'
                             send_telegram_notification(message, value, usd_value, tx['hash'], blockchain)
                             #print(f'\n{message}, Value: {value} {blockchain.upper()}, ${usd_value:.2f}\n')
 
@@ -115,10 +115,10 @@ def monitor_wallets():
             # Sleep for 10 seconds before trying again
             time.sleep(10)
 
-def add_wallet(wallet_address, blockchain):
+def add_wallet(wallet_address, blockchain, mote):
     file_path = "watched_wallets.txt"
     with open(file_path, 'a') as f:
-        f.write(f'{blockchain}:{wallet_address}\n')
+        f.write(f'{blockchain}:{wallet_address}:{mote}\n')
 
 def remove_wallet(wallet_address, blockchain):
     file_path = "watched_wallets.txt"
@@ -157,6 +157,7 @@ def add(update, context):
 
     blockchain = context.args[0].lower()
     wallet_address = context.args[1]
+    mote = context.args[3].lower()
 
     # Check if the wallet address is in the correct format for the specified blockchain
     if blockchain == 'eth':
@@ -171,8 +172,8 @@ def add(update, context):
         context.bot.send_message(chat_id=update.message.chat_id, text=f"Invalid blockchain specified: {blockchain}")
         return
     
-    add_wallet(wallet_address, blockchain)
-    message = f'Added {wallet_address} to the list of watched {blockchain.upper()} wallets.'
+    add_wallet(wallet_address, blockchain, mote)
+    message = f'Agregada la cartera {wallet_address} con mote {mote} a la lista de vigilados en la red {blockchain.upper()}.'
     context.bot.send_message(chat_id=update.message.chat_id, text=message)
 
 def remove(update, context):
@@ -192,7 +193,7 @@ def list_wallets(update, context):
         eth_wallets = []
         bnb_wallets = []
         for wallet in wallets:
-            blockchain, wallet_address = wallet.split(':')
+            blockchain, wallet_address, mote = wallet.split(':')
             if blockchain == 'eth':
                 eth_wallets.append(wallet_address)
             elif blockchain == 'bnb':
@@ -233,7 +234,7 @@ dispatcher.add_handler(remove_handler)
 dispatcher.add_handler(list_handler)
 
 updater.start_polling()
-print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Telegram bot started.")
+print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] El bot ha empezado... hora de chivarse.")
 
-print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Monitoring wallets...")
+print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Monitorizando carteras...")
 monitor_wallets()
